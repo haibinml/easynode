@@ -15,12 +15,11 @@
       <el-button
         v-show="selectScripts.length"
         type="danger"
-        class="batch_remove_btn"
         @click="handleBatchRemove"
       >
         批量删除
       </el-button>
-      <el-button type="primary" class="add_script_btn" @click="addScript">添加脚本</el-button>
+      <el-button type="primary" @click="addScript">添加脚本</el-button>
       <PlusSupportTip>
         <el-dropdown trigger="click" :disabled="!isPlusActive">
           <el-button type="primary" class="group_action_btn" :disabled="!isPlusActive">
@@ -34,45 +33,56 @@
           </template>
         </el-dropdown>
       </PlusSupportTip>
+      <el-button type="primary" class="group_action_btn" @click="ScriptGroupVisible = true">分组管理</el-button>
     </div>
-    <el-table
-      v-loading="loading"
-      :data="paginatedFilteredList"
-      @selection-change="handleSelectionChange"
-    >
-      <el-table-column
-        type="selection"
-        width="55"
-        :selectable="(row) => {
-          return row.index !== '--' && row.index !== '-' && row.index !== undefined && row.index !== null
-        }"
-      />
-      <el-table-column prop="index" label="序号" width="100px" />
-      <el-table-column prop="name" label="名称" />
-      <el-table-column prop="description" label="描述" />
-      <el-table-column prop="command" label="指令内容" show-overflow-tooltip />
-      <el-table-column label="操作" fixed="right" width="160px">
-        <template #default="{ row }">
-          <template v-if="row.index !== '--'">
-            <el-button type="primary" @click="handleChange(row)">修改</el-button>
-            <el-button v-show="row.id !== 'own'" type="danger" @click="handleRemove(row)">删除</el-button>
-          </template>
-          <span v-else>--</span>
-        </template>
-      </el-table-column>
-    </el-table>
 
-    <div class="pagination-container">
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :page-sizes="[20, 50, 100]"
-        :total="scriptList.length"
-        layout="total, sizes, prev, pager, next"
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-      />
-    </div>
+    <el-tabs v-model="activeTab" type="border-card" class="script-tabs">
+      <el-tab-pane
+        v-for="group in groupList"
+        :key="group.id"
+        :label="group.name"
+        :name="group.id"
+      >
+        <el-table
+          v-loading="loading"
+          :data="getFilteredScriptsByGroup(group.id)"
+          @selection-change="handleSelectionChange"
+        >
+          <el-table-column
+            type="selection"
+            width="55"
+            :selectable="(row) => {
+              return row.index !== '--' && row.index !== '-' && row.index !== undefined && row.index !== null
+            }"
+          />
+          <el-table-column prop="index" label="序号" width="100px" />
+          <el-table-column prop="name" label="名称" />
+          <el-table-column prop="description" label="描述" />
+          <el-table-column prop="command" label="指令内容" show-overflow-tooltip />
+          <el-table-column label="操作" fixed="right" width="160px">
+            <template #default="{ row }">
+              <template v-if="row.index !== '--'">
+                <el-button type="primary" @click="handleChange(row)">修改</el-button>
+                <el-button v-show="row.id !== 'own'" type="danger" @click="handleRemove(row)">删除</el-button>
+              </template>
+              <span v-else>--</span>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div class="pagination-container">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[20, 50, 100]"
+            :total="getFilteredScriptsByGroup(group.id).length"
+            layout="total, sizes, prev, pager, next"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          />
+        </div>
+      </el-tab-pane>
+    </el-tabs>
 
     <el-dialog
       v-model="formVisible"
@@ -91,6 +101,22 @@
         label-width="100px"
         :show-message="false"
       >
+        <el-form-item key="group" label="分组" prop="group">
+          <el-select
+            v-model="formData.group"
+            placeholder=""
+            clearable
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="item in groupList"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+              :disabled="item.id === 'builtin'"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="名称" prop="name">
           <el-input
             v-model="formData.name"
@@ -139,15 +165,21 @@
       v-model:show="importVisible"
       @update-list="() => $store.getScriptList()"
     />
+
+    <ScriptGroup
+      v-model:show="ScriptGroupVisible"
+      @group-deleted="handleGroupDeleted"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, getCurrentInstance, h } from 'vue'
+import { ref, reactive, computed, nextTick, getCurrentInstance, h, watch } from 'vue'
 import ImportScript from './components/import-script.vue'
 import PlusSupportTip from '@/components/common/PlusSupportTip.vue'
 import { ArrowDown, Search } from '@element-plus/icons-vue'
 import { exportFile } from '@/utils'
+import ScriptGroup from './components/script-group.vue'
 
 const { proxy: { $api, $message, $messageBox, $store, $tools } } = getCurrentInstance()
 
@@ -174,6 +206,7 @@ const handleBatchRemove = () => {
 }
 
 let formData = reactive({
+  group: 'default',
   name: '',
   description: '',
   index: 0,
@@ -182,6 +215,7 @@ let formData = reactive({
 
 const rules = computed(() => {
   return {
+    group: { required: true, message: '选择一个分组' },
     name: { required: true, trigger: 'change' },
     description: { required: false, trigger: 'change' },
     index: { required: false, type: 'number', trigger: 'change' },
@@ -193,6 +227,8 @@ const updateFormRef = ref(null)
 
 const scriptList = computed(() => $store.scriptList)
 const isPlusActive = computed(() => $store.isPlusActive)
+
+const groupList = computed(() => $store.scriptGroupList || [])
 
 let addScript = () => {
   formData.id = null
@@ -263,11 +299,14 @@ const filteredScriptList = computed(() => {
   )
 })
 
-const paginatedFilteredList = computed(() => {
+const activeTab = ref(computed(() => groupList.value?.[0]?.id || 'default').value)
+
+const getFilteredScriptsByGroup = (groupId) => {
+  const groupScripts = filteredScriptList.value.filter(script => script.group === groupId)
   const start = (currentPage.value - 1) * pageSize.value
   const end = start + pageSize.value
-  return filteredScriptList.value.slice(start, end)
-})
+  return groupScripts.slice(start, end)
+}
 
 const handleSizeChange = (val) => {
   pageSize.value = val
@@ -282,23 +321,41 @@ const handleSearch = () => {
   currentPage.value = 1
 }
 
+const ScriptGroupVisible = ref(false)
+
+const handleGroupDeleted = (deletedGroupId) => {
+  if (deletedGroupId === activeTab.value) {
+    nextTick(() => {
+      activeTab.value = groupList.value?.[0]?.id || 'default'
+    })
+  }
+}
+
+watch(activeTab, () => {
+  currentPage.value = 1
+})
+
 </script>
 
 <style lang="scss" scoped>
 .scripts_container {
-  padding: 20px;
+  padding: 0 20px 20px 20px;
   .header {
     padding: 15px;
     display: flex;
     align-items: center;
     justify-content: end;
-    .add_script_btn {
-      margin: 0 10px;
+    .group_action_btn {
+      margin-left: 10px;
     }
     .search_input {
       width: 300px;
       margin-right: auto;
     }
+  }
+
+  .script-tabs {
+    margin-top: 20px;
   }
 }
 

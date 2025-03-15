@@ -1,3 +1,11 @@
+## [3.0.4](https://github.com/chaos-zhu/easynode/releases) (2025-03-15)
+
+* 新增脚本库分组功能
+* 终端页新增脚本库布局（todo
+* 优化命令多行编辑器（todo
+* 优化多项新增序号自动累加
+* 修复终端页面同步会话在自动执行脚本开关为true时自动添加回车的bug
+
 ## [3.0.3](https://github.com/chaos-zhu/easynode/releases) (2024-12-22)
 
 * 支持keyboard-interactive服务器验证(serv00验证通过)

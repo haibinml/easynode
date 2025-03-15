@@ -328,7 +328,7 @@ const terminalInput = (command) => {
     return index !== activeTabIndex.value
   })
   filterTerminalRefs.forEach(hostRef => {
-    hostRef.inputCommand(command)
+    hostRef.inputCommand(command, true)
   })
 }
 
